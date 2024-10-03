@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "lldb",
+      "request": "launch",
+      "args": [],
+      "cwd": "/home/aram/dev/SBUS",
+      "program": "/home/aram/dev/SBUS/build/Debug/outDebug"
+    }
+  ]
+}
