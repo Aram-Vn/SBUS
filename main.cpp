@@ -1,7 +1,15 @@
 #include <array>
 #include <cstdint>
+#include <cstring> // For memset
+#include <cstring>
+#include <fcntl.h> // For open()
+#include <fcntl.h>
 #include <iomanip>
 #include <iostream>
+#include <linux/serial.h> // For serial_struct and TIOCGSERIAL
+#include <termios.h>      // For termios
+#include <termios.h>
+#include <unistd.h>
 
 constexpr std::size_t   SBUS_FRAME_SIZE = 25;
 constexpr std::uint8_t  SBUS_START_BYTE = 0x0F;
@@ -90,6 +98,58 @@ public:
             sbusFrame[23] |= (1 << 2);
         }
     }
+
+    void serial_config()
+    {
+        struct termios options;
+        sbus_fd = open(DEVICE, O_RDWR | O_NONBLOCK);
+        if (sbus_fd < 0)
+        {
+            std::cerr << "Error opening serial port" << std::endl;
+            return;
+        }
+
+        if (tcgetattr(sbus_fd, &options) != 0)
+        {
+            std::cerr << "Error getting attributes" << std::endl;
+            return;
+        }
+
+        tcflush(sbus_fd, TCIFLUSH);
+        memset(&options, 0, sizeof(options)); // Clear struct for new attributes
+
+        // Configure serial options
+        options.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+        options.c_cflag |= (CLOCAL | CREAD); // Ignore modem control lines
+        options.c_cflag &= ~CSIZE;           // Clear the current character size mask
+        options.c_cflag |= CS8;              // Set character size to 8 bits
+        options.c_cflag &= ~PARENB;          // No parity bit
+        options.c_cflag &= ~CSTOPB;          // One stop bit
+
+        // Custom baud rate setting
+        // NOTE: You may need to adjust the termios structure size depending on your system
+        speed_t custom_speed = 10000; // Define custom speed
+        cfsetispeed(&options, custom_speed);
+        cfsetospeed(&options, custom_speed);
+
+        options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // Raw input
+        options.c_oflag &= ~OPOST;                          // Raw output
+
+        // Apply the options
+        if (tcsetattr(sbus_fd, TCSANOW, &options) != 0)
+        {
+            std::cerr << "Error setting attributes" << std::endl;
+        }
+    }
+
+    ~SBUS()
+    {
+        close(sbus_fd);
+    }
+
+private:
+    int                          sbus_fd;
+    static constexpr const char* DEVICE = "/dev/ttyUSB0";
 };
 
 int main()
@@ -102,6 +162,8 @@ int main()
 
     SBUS decoder;
     decoder.decodeSBUSFrame(sbusFrame, channels);
+
+    decoder.serial_config();
 
     for (int i = 0; i < NUM_CHANNELS; ++i)
     {
